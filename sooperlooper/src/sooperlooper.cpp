@@ -40,7 +40,7 @@
 
 /**********************************************************************************************************************************************************/
 
-enum {IN_0, OUT_0, PLAY_PAUSE, RECORD, PLUGIN_PORT_COUNT};
+enum {IN_0, OUT_0, PLAY_PAUSE, RECORD, ERASE, PLUGIN_PORT_COUNT};
 
 #define PLUGIN_AUDIO_PORT_COUNT     2
 #define PLUGIN_CONTROL_PORT_COUNT   PLUGIN_PORT_COUNT - PLUGIN_AUDIO_PORT_COUNT
@@ -283,10 +283,13 @@ public:
     float *out_0;
     float *play_pause;
     float *record;
+    float *erase;
     float *play_pause_last;
     float *record_last;
     SooperLooper *pLS;
-    int recording;
+    int playing;
+    int started;
+    int recording; 
     int params_state[PLUGIN_CONTROL_PORT_COUNT];
 };
 
@@ -525,9 +528,9 @@ static LoopChunk * beginOverdub(SooperLooper *pLS, LoopChunk *loop)
       loop->lStartAdj = 0;
       loop->lEndAdj = 0;
       pLS->nextState = -1;
-      
-      loop->dOrigFeedback = LIMIT_BETWEEN_0_AND_1(*pLS->pfFeedback);
 
+     // loop->dOrigFeedback = LIMIT_BETWEEN_0_AND_1(*(pLS->pfFeedback));
+      loop->dOrigFeedback = 1.0;
       if (loop->dCurrPos > 0) 
 	 loop->frontfill = 1;
       else
@@ -665,32 +668,8 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
 {
     SooperLooperPlugin *plugin;
     plugin = (SooperLooperPlugin *) instance;
-   
-    if (*(plugin->play_pause) != *(plugin->play_pause_last)) {
-            
-        if (*(plugin->play_pause) > 0) {
-            printf("[SOOPERLOOPER LV2] Pause\n");
-            plugin->pLS->state = STATE_OFF;
-        } else {
-            printf("[SOOPERLOOPER LV2] Play\n");
-            plugin->pLS->state = STATE_PLAY;
-        }
-        *(plugin->play_pause_last) = *(plugin->play_pause);
-    }
-    
-    if (*(plugin->record) != *(plugin->record_last)) {
-            
-        if (*(plugin->record) > 0) {
-            printf("[SOOPERLOOPER LV2] Record\n");
-            plugin->pLS->state = STATE_TRIG_START;
-        } else {
-            printf("[SOOPERLOOPER LV2] Stop Record\n");
-            plugin->pLS->state = STATE_PLAY;
-        }
-        *(plugin->record_last) = *(plugin->record);
-    }
 
-  // LADSPA_Data * pfBuffer;
+// LADSPA_Data * pfBuffer;
   LADSPA_Data * pfInput;
   LADSPA_Data * pfOutput;
   LADSPA_Data fDry=1.0, fWet=1.0, tmpWet;
@@ -723,7 +702,6 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
 
   if (!pLS || !plugin->in_0 || !plugin->out_0) {
      // something is badly wrong!!!
-     printf("Something\n");
      return;
   }
   
@@ -799,6 +777,49 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
   
   lSampleIndex = 0;
 
+
+  /* 
+   * LV2 run, reading control ports and setting states 
+   */
+    
+    if (*(plugin->play_pause) > 0.0) {
+        if (!plugin->started) {
+            if (*(plugin->record) > 0.0) {
+                plugin->pLS->state = STATE_TRIG_START;
+                plugin->started = 1;
+                plugin->playing = 1;
+                plugin->recording = 1;
+            }
+        } else {
+            if (plugin->playing) {
+                plugin->pLS->state = STATE_OFF;
+                plugin->playing = 0;
+            } else { 
+                plugin->pLS->state = STATE_PLAY;
+                plugin->playing = 1;
+            }
+        }
+        *(plugin->play_pause) = 0.0;
+    }
+    
+    if (*(plugin->record) > 0.0) {
+        if (plugin->started && plugin->recording == 0) {
+            plugin->recording = 1;
+            if (loop) {
+               loop = beginOverdub(pLS, loop);  
+            if (loop)
+                srcloop = loop->srcloop;
+            else
+                srcloop = NULL;
+            }
+        }
+    } else {
+        if (plugin->started && plugin->playing && plugin->recording) {
+            plugin->pLS->state = STATE_PLAY;
+            plugin->recording = 0;
+        }
+    } 
+
   while (lSampleIndex < SampleCount)
   {
      loop = pLS->headLoopChunk;
@@ -820,7 +841,6 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
 		 
 		 loop = pushNewLoopChunk(pLS, 0);
 		 if (loop) {
-		    printf("Entering RECORD state\n");
 		    pLS->state = STATE_RECORD;
 		    // force rate to be 1.0
 		    fRate = pLS->fCurrRate = 1.0;
@@ -865,7 +885,6 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
              // stop the recording RIGHT NOW
              // we don't support loop crossing the end of memory
              // it's easier.
-             printf("Entering PLAY state -- END of memory!\n");
              //DBG(fprintf(stderr, "Entering PLAY state -- END of memory! %08x\n",
                      //(unsigned) (pLS->pSampleBuf + pLS->lBufferSize) ));
              pLS->state = STATE_PLAY;
@@ -1549,8 +1568,7 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
 	*pLS->pfStateOut = (LADSPA_Data) STATE_OFF;
 
   }
-  
-  
+ 
 }
 
 /*****************************************************************************/
@@ -1585,6 +1603,8 @@ LV2_Handle SooperLooperPlugin::instantiate(const LV2_Descriptor* descriptor, dou
     SooperLooperPlugin *plugin = new SooperLooperPlugin();
 
     SooperLooper * pLS;
+    plugin->started = 0;
+    plugin->playing = 0;
     // important note: using calloc to zero all data
     pLS = (SooperLooper *) calloc(1, sizeof(SooperLooper));
     if (pLS == NULL) 
