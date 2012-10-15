@@ -40,7 +40,7 @@
 
 /**********************************************************************************************************************************************************/
 
-enum {IN_0, OUT_0, PLAY_PAUSE, RECORD, ERASE, PLUGIN_PORT_COUNT};
+enum {IN_0, OUT_0, PLAY_PAUSE, RECORD, RESET, UNDO, PLUGIN_PORT_COUNT};
 
 #define PLUGIN_AUDIO_PORT_COUNT     2
 #define PLUGIN_CONTROL_PORT_COUNT   PLUGIN_PORT_COUNT - PLUGIN_AUDIO_PORT_COUNT
@@ -283,9 +283,8 @@ public:
     float *out_0;
     float *play_pause;
     float *record;
-    float *erase;
-    float *play_pause_last;
-    float *record_last;
+    float *reset;
+    float *undo;
     SooperLooper *pLS;
     int playing;
     int started;
@@ -793,6 +792,7 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
         } else {
             if (plugin->playing) {
                 plugin->pLS->state = STATE_OFF;
+                plugin->recording = 0;
                 plugin->playing = 0;
             } else { 
                 plugin->pLS->state = STATE_PLAY;
@@ -803,7 +803,7 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
     }
     
     if (*(plugin->record) > 0.0) {
-        if (plugin->started && plugin->recording == 0) {
+        if (plugin->started && plugin->playing && plugin->recording == 0) {
             plugin->recording = 1;
             if (loop) {
                loop = beginOverdub(pLS, loop);  
@@ -819,6 +819,23 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
             plugin->recording = 0;
         }
     } 
+
+    if (*(plugin->reset) > 0.0) {
+        clearLoopChunks(pLS);
+        plugin->recording = 0;
+        plugin->playing = 0;
+        plugin->started = 0;
+        *(plugin->reset) = 0.0;
+    }
+
+    if (*(plugin->undo) > 0.0) {
+        if(loop) { 
+            undoLoop(pLS); 
+            pLS->state = STATE_PLAY;
+        }
+    }
+
+    /* end control reading */
 
   while (lSampleIndex < SampleCount)
   {
@@ -1698,6 +1715,12 @@ void SooperLooperPlugin::connect_port(LV2_Handle instance, uint32_t port, void *
         break;
     case RECORD:
         plugin->record = (float*) data;
+        break;
+    case RESET:
+        plugin->reset = (float*) data;
+        break;
+    case UNDO:
+        plugin->undo = (float*) data;
         break;
     }
 }
