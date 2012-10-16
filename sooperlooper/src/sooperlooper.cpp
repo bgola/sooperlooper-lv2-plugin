@@ -40,7 +40,7 @@
 
 /**********************************************************************************************************************************************************/
 
-enum {IN_0, OUT_0, PLAY_PAUSE, RECORD, RESET, UNDO, PLUGIN_PORT_COUNT};
+enum {IN_0, OUT_0, PLAY_PAUSE, RECORD, RESET, UNDO, REDO, PLUGIN_PORT_COUNT};
 
 #define PLUGIN_AUDIO_PORT_COUNT     2
 #define PLUGIN_CONTROL_PORT_COUNT   PLUGIN_PORT_COUNT - PLUGIN_AUDIO_PORT_COUNT
@@ -285,6 +285,7 @@ public:
     float *record;
     float *reset;
     float *undo;
+    float *redo;
     SooperLooper *pLS;
     int playing;
     int started;
@@ -383,11 +384,14 @@ static void clearLoopChunks(SooperLooper *pLS)
 
 void undoLoop(SooperLooper *pLS)
 {
+    printf("[SL] chamou undo\n");
    LoopChunk *loop = pLS->headLoopChunk;
    LoopChunk *prevloop;
    
    prevloop = loop->prev;
+    printf("fora do if\n");
    if (prevloop && prevloop == loop->srcloop) {
+       printf("dentro do if\n");
       // if the previous was the source of the one we're undoing
       // pass the dCurrPos along, otherwise leave it be.
       prevloop->dCurrPos = fmod(loop->dCurrPos+loop->lStartAdj, prevloop->lLoopLength);
@@ -833,8 +837,16 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
             undoLoop(pLS); 
             pLS->state = STATE_PLAY;
         }
+        *(plugin->undo) = 0.0;
     }
 
+    if (*(plugin->redo) > 0.0) {
+        if(loop) { 
+            redoLoop(pLS); 
+            pLS->state = STATE_PLAY;
+        }
+        *(plugin->redo) = 0.0;
+    }
     /* end control reading */
 
   while (lSampleIndex < SampleCount)
@@ -1721,6 +1733,9 @@ void SooperLooperPlugin::connect_port(LV2_Handle instance, uint32_t port, void *
         break;
     case UNDO:
         plugin->undo = (float*) data;
+        break;
+    case REDO:
+        plugin->redo = (float*) data;
         break;
     }
 }
