@@ -15,7 +15,7 @@ PLUGIN = $(shell echo $(DIR_NAME) | tr A-Z a-z).so
 
 # installation path
 ifndef INSTALL_PATH
-	INSTALL_PATH = /usr/local/lib/lv2/sooperlooper.lv2
+	INSTALL_PATH = /usr/local/lib/lv2/
 endif
 
 # compiler and linker
@@ -46,6 +46,6 @@ clean:
 	$(RM) src/*.o $(PLUGIN)
 
 install: $(OBJ) 
-	mkdir -p $(INSTALL_PATH)
-	cp $(PLUGIN) $(INSTALL_PATH)
-	cp src/*.ttl $(INSTALL_PATH)
+	mkdir -p $(INSTALL_PATH)/sooperlooper.lv2
+	cp $(PLUGIN) $(INSTALL_PATH)/sooperlooper.lv2/
+	cp src/*.ttl $(INSTALL_PATH)/sooperlooper.lv2/
