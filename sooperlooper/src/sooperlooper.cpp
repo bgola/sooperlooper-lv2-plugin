@@ -384,14 +384,11 @@ static void clearLoopChunks(SooperLooper *pLS)
 
 void undoLoop(SooperLooper *pLS)
 {
-    printf("[SL] chamou undo\n");
    LoopChunk *loop = pLS->headLoopChunk;
    LoopChunk *prevloop;
    
    prevloop = loop->prev;
-    printf("fora do if\n");
    if (prevloop && prevloop == loop->srcloop) {
-       printf("dentro do if\n");
       // if the previous was the source of the one we're undoing
       // pass the dCurrPos along, otherwise leave it be.
       prevloop->dCurrPos = fmod(loop->dCurrPos+loop->lStartAdj, prevloop->lLoopLength);
