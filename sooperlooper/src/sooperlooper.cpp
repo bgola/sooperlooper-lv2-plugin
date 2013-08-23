@@ -782,43 +782,58 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
    * LV2 run, reading control ports and setting states 
    */
     
-    if (*(plugin->play_pause) > 0.0) {
+    if (*(plugin->play_pause) > 0.0 && !plugin->playing) {
+        plugin->playing = 1;
         if (!plugin->started) {
-            if (*(plugin->record) > 0.0) {
+            if (plugin->recording) {
+                plugin->pLS->state = STATE_TRIG_START;
+                printf("Starting!!\n");
+                plugin->started = 1;
+            }
+        } else {
+            if (plugin->recording) {
+                if (loop) {
+                    loop = beginOverdub(pLS, loop);  
+                    if (loop)
+                        srcloop = loop->srcloop;
+                    else
+                        srcloop = NULL;
+                }
+            } else {
+                plugin->pLS->state = STATE_PLAY;
+            }
+        }
+    } else if (*(plugin->play_pause) <= 0.0 && plugin->playing) {
+            plugin->pLS->state = STATE_OFF;
+            plugin->playing = 0;
+    }
+    
+    if (*(plugin->record) > 0.0 && !plugin->recording) {
+        plugin->recording = 1;
+        if (!plugin->started) {
+            if (plugin->playing) {
+                printf("Starting!!\n");
                 plugin->pLS->state = STATE_TRIG_START;
                 plugin->started = 1;
-                plugin->playing = 1;
-                plugin->recording = 1;
             }
         } else {
             if (plugin->playing) {
-                plugin->pLS->state = STATE_OFF;
-                plugin->recording = 0;
-                plugin->playing = 0;
-            } else { 
-                plugin->pLS->state = STATE_PLAY;
-                plugin->playing = 1;
+                if (loop) {
+                    loop = beginOverdub(pLS, loop);  
+                    if (loop)
+                        srcloop = loop->srcloop;
+                    else
+                        srcloop = NULL;
+                }
             }
         }
-        *(plugin->play_pause) = 0.0;
-    }
-    
-    if (*(plugin->record) > 0.0) {
-        if (plugin->started && plugin->playing && plugin->recording == 0) {
-            plugin->recording = 1;
-            if (loop) {
-               loop = beginOverdub(pLS, loop);  
-            if (loop)
-                srcloop = loop->srcloop;
-            else
-                srcloop = NULL;
-            }
-        }
-    } else {
-        if (plugin->started && plugin->playing && plugin->recording) {
+    } else if (*(plugin->record) <= 0.0 && plugin->recording) {
+        plugin->recording = 0;
+        printf("stopping record\n");
+        if (plugin->started && plugin->playing)
             plugin->pLS->state = STATE_PLAY;
-            plugin->recording = 0;
-        }
+        else 
+            plugin->pLS->state = STATE_OFF;
     } 
 
     if (*(plugin->reset) > 0.0) {
