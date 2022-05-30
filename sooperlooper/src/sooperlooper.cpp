@@ -787,7 +787,6 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
         if (!plugin->started) {
             if (plugin->recording) {
                 plugin->pLS->state = STATE_TRIG_START;
-                printf("Starting!!\n");
                 plugin->started = 1;
             }
         } else {
@@ -812,7 +811,6 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
         plugin->recording = 1;
         if (!plugin->started) {
             if (plugin->playing) {
-                printf("Starting!!\n");
                 plugin->pLS->state = STATE_TRIG_START;
                 plugin->started = 1;
             }
@@ -829,7 +827,6 @@ void SooperLooperPlugin::run(LV2_Handle instance, uint32_t SampleCount)
         }
     } else if (*(plugin->record) <= 0.0 && plugin->recording) {
         plugin->recording = 0;
-        printf("stopping record\n");
         if (plugin->started && plugin->playing)
             plugin->pLS->state = STATE_PLAY;
         else 
